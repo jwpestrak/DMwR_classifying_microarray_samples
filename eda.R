@@ -2,10 +2,11 @@
 library(dplyr)
 library(tidyr)
 library(ggplot2)
+library(stringr)
 
-source("http://bioconductor.org/biocLite.R")
-biocLite()
-biocLite("ALL")
+# source("http://bioconductor.org/biocLite.R")
+# biocLite()
+# biocLite("ALL")
 
 library(biobase)
 library(ALL)
@@ -83,4 +84,68 @@ df$sd  <- apply(X = df[, 1:4], MARGIN = 1, FUN = sd)
 df
 
 #### 5.3 Gene (Feature) Selection
-# here
+
+# Feature selection is the process of selecting a subset of features 
+# (i.e. variables) in order to 'focus' analysis.
+# A more general approach is to decide the weight attached to each feature.
+# Two types of appraoches to feature selection:
+#     1. filter - step-by-step use of statistical properties of features to 
+#                 select final set
+#     2. wrapper - iterative search process using data mining tools in selection
+#                  process
+
+#### 5.3.1 Simple Filters Based on Dustribution Properties
+# let's get a view of the distribution of the expression levels of each gene
+# across all individuals 
+
+# recall that rows of es are features and columns are samples
+
+rowIQRs <- function(em) {
+    rowQ(imat = em, which = ceiling(0.75 * ncol(em))) -
+    rowQ(imat = em, which = floor(0.25 * ncol(em)))
+}
+plot(x = rowMedians(es), y = rowIQRs(es),
+     xlab = 'Median expression level',
+     ylab = 'IQR expression level',
+     main = 'Main characteristics of Gene Expression Levels')
+
+# many genes have IQRs near zero (low variability), and these are safe(r) to 
+# remove because they provide reason to believe that they will not be useful in 
+# discriminating among the different mutations of B-cell ALL.
+# CAVEAT: we're focusing on genes individually and not conjointly
+#         there is risk that some of these soon-to-removed genes, when included,
+#         could be useful for classification
+#         see RELIEF method
+
+# use heuristic threshold for removal - remove gene if IQR is less than 1 / 5 of
+# global IQR
+
+biocLite("genefilter")
+biocLite("hgu95av2.db")
+library(genefilter)
+
+ALLb <- nsFilter(eset = ALLb,
+                 var.func = IQR,
+                 var.cutoff = IQR(as.vector(es)) / 5,
+                 feature.exclude = "^AFFX")
+
+ALLb <- ALLb$eset
+es <- exprs(ALLb)
+dim(es)
+
+# alternative approach
+# dtaes <- tbl_df(data.frame(es)) %>%
+#          mutate(gene = rownames(es)) %>%
+#          filter(str_sub(gene, 1, 2) != "AF") 
+# 
+# dtaes$iqr <- apply(dtaes[, 1:(ncol(dtaes) - 1)], MARGIN = 1, FUN = IQR)
+# dtaes
+# 
+# global_iqr <- IQR(as.vector(es))
+# #iqr_20p <- quantile(dtaes$iqr, seq(0, 1, 0.20))["20%"]
+# 
+# dtaes <- dtaes %>%
+#          select(gene, iqr) %>%
+#          filter(iqr > global_iqr * (1 / 5) )
+
+#### 5.3.2 ANOVA filters
