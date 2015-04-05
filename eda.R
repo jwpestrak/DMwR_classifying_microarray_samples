@@ -83,3 +83,4 @@ df$sd  <- apply(X = df[, 1:4], MARGIN = 1, FUN = sd)
 df
 
 #### 5.3 Gene (Feature) Selection
+# here
